@@ -1,0 +1,136 @@
+from pathlib import Path
+
+KEY = 73
+
+
+def checksum(text: str) -> int:
+    h = 17
+    for ch in text:
+        h = (h * 131 + ord(ch)) % 2147483647
+    return h
+
+
+def xor_hex_encode(text: str, key: int) -> str:
+    return ''.join(f'{(ord(ch) ^ key):02X}' for ch in text)
+
+
+def wrap_chunks_as_lua_table(value: str, width: int = 112) -> str:
+    lines = ["{"]
+    for i in range(0, len(value), width):
+        suffix = "," if i + width < len(value) else ""
+        lines.append(f'    "{value[i:i+width]}"{suffix}')
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def build_loader(payload: str, author: str) -> str:
+    payload_hex = xor_hex_encode(payload, KEY)
+    author_hex = xor_hex_encode(author, KEY)
+    payload_sum = checksum(payload)
+    author_sum = checksum(author)
+
+    return f'''local KEY = {KEY}
+local PAYLOAD_CHECKSUM = {payload_sum}
+local AUTHOR_CHECKSUM = {author_sum}
+
+local PAYLOAD =
+{wrap_chunks_as_lua_table(payload_hex)}
+
+local AUTHOR =
+{wrap_chunks_as_lua_table(author_hex)}
+
+local function checksum(value)
+    local hash = 17
+    for index = 1, #value do
+        hash = (hash * 131 + string.byte(value, index)) % 2147483647
+    end
+    return hash
+end
+
+local function decodeHexBlob(blob)
+    local parts = {{}}
+    local offset = 1
+    local length = #blob
+
+    while offset <= length do
+        local hex = string.sub(blob, offset, offset + 1)
+        local value = tonumber(hex, 16)
+        if not value then
+            return nil
+        end
+        parts[#parts + 1] = string.char(value)
+        offset = offset + 2
+    end
+
+    return table.concat(parts)
+end
+
+local function xorByte(byteValue, keyValue)
+    if bit and bit.bxor then
+        return bit.bxor(byteValue, keyValue)
+    end
+
+    local left = byteValue
+    local right = keyValue
+    local result = 0
+    local bitValue = 1
+
+    while left > 0 or right > 0 do
+        local leftBit = left % 2
+        local rightBit = right % 2
+        if leftBit ~= rightBit then
+            result = result + bitValue
+        end
+        left = math.floor(left / 2)
+        right = math.floor(right / 2)
+        bitValue = bitValue * 2
+    end
+
+    return result
+end
+
+local function xorText(value)
+    local chars = {{}}
+    for index = 1, #value do
+        chars[#chars + 1] = string.char(xorByte(string.byte(value, index), KEY))
+    end
+    return table.concat(chars)
+end
+
+local function decodeProtectedValue(blob)
+    local encoded = decodeHexBlob(blob)
+    if not encoded then
+        return nil
+    end
+    return xorText(encoded)
+end
+
+local payload = decodeProtectedValue(table.concat(PAYLOAD, ""))
+local author = decodeProtectedValue(table.concat(AUTHOR, ""))
+
+if not payload or not author then
+    print("Protected pack decode failed")
+    return
+end
+
+if checksum(payload) ~= PAYLOAD_CHECKSUM or checksum(author) ~= AUTHOR_CHECKSUM then
+    print("Protected pack checksum mismatch")
+    return
+end
+
+print("Verified author: " .. tostring(author))
+print(payload)
+'''
+
+
+if __name__ == "__main__":
+    source_path = Path("conteudo_original.txt")
+    output_path = Path("ProtectedLoader.lua")
+    author_name = "NomeDoAutor"
+
+    payload = source_path.read_text(encoding="utf-8")
+    loader = build_loader(payload, author_name)
+    output_path.write_text(loader, encoding="utf-8")
+
+    print(f"Arquivo gerado: {{output_path}}")
+    print("Agora voce deve adaptar o final do loader para reconstruir seus dados no formato que o mod usa.")

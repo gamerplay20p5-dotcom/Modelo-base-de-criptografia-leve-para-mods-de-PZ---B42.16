@@ -1,0 +1,101 @@
+Protecao leve para mods Lua de Project Zomboid
+
+Fluxo geral:
+1. Escolha o conteudo que voce quer proteger.
+2. Transforme esse conteudo em texto.
+3. Passe esse texto por uma codificacao simples com XOR.
+4. Converta o resultado para hexadecimal.
+5. Salve esse blob protegido dentro de um arquivo Lua.
+6. No Lua, reconstrua o conteudo em memoria.
+7. Valide com checksum antes de usar.
+
+Passo a passo:
+
+1. Separe o conteudo que vale proteger
+- O ideal e proteger apenas a parte mais sensivel.
+- Nao e necessario proteger o mod inteiro.
+
+2. Converta esse conteudo para um texto estruturado
+- O jeito mais simples e transformar os dados em linhas.
+- Exemplo:
+  id<TAB>tipo<TAB>titulo<TAB>descricao
+- Quanto mais padrao esse formato, mais facil reconstruir depois.
+
+3. Defina uma chave numerica
+- Exemplo:
+  KEY = 73
+- Essa chave sera usada no XOR.
+
+4. Aplique XOR em cada caractere
+- Para cada caractere do texto:
+  - pegue o codigo do caractere
+  - faca XOR com a chave
+  - guarde o resultado
+
+5. Converta o resultado para hexadecimal
+- Em vez de salvar bytes crus, salve em texto hexadecimal.
+- Isso facilita embutir dentro do Lua.
+
+6. Gere um checksum do conteudo original
+- O checksum serve para detectar adulteracao.
+- No nosso caso, usamos uma funcao simples baseada em acumulacao numerica.
+- Voce tambem pode gerar checksum da autoria so para dar uma relevância.
+
+7. Monte um loader Lua
+- Esse arquivo deve conter:
+  - a chave
+  - o payload em hex
+  - o checksum esperado
+  - funcoes para:
+    - converter hex para bytes
+    - desfazer o XOR
+    - validar o checksum
+    - reconstruir os dados
+
+8. No carregamento do mod
+- O Lua junta os pedaços do payload.
+- Decodifica de hex para bytes.
+- Desfaz o XOR.
+- Verifica o checksum.
+- Se estiver tudo certo:
+  - carrega os dados.
+- Se nao estiver:
+  - falha ou desabilita a parte protegida.
+
+9. Mantenha um ponto autorizado de extensao
+- Se o mod precisa continuar expansivel:
+  - proteja apenas o conteudo built-in.
+  - deixe um arquivo separado para customizacoes autorizadas.
+- Exemplo:
+  - TM42_Missions_Default.lua protegido
+  - TM42_Missions_Custom.lua aberto
+- isso foi porque meu mod permite a criação de novas missões, para isso deixei essa parte da criação abrida
+
+10. Nao exagere
+- Se proteger tudo demais:
+  - fica ruim de manter
+  - dificulta debug
+  - piora compatibilidade
+- Proteja o que realmente importa, eu tentei proteger a maioria e coeçou a da merda, consequentemente tentei manter o mais importante. 
+
+Limites reais:
+- Isso nao impede 100 por cento.
+- Isso nao protege a pasta inteira automaticamente.
+- Isso nao protege assets ou outros arquivos se voce nao incluir eles no fluxo.
+- Isso nao substitui permissao, autoria e aviso legal.
+
+Se quiser proteger mais:
+- Adicione verificacao de nome esperado do projeto.
+- Adicione verificacao de autor.
+- Adicione validacao de blocos diferentes do mod.
+- Proteja mais de um payload separado.
+
+Resumo simples:
+- pega o conteudo
+- embaralha com XOR
+- salva em hex
+- verifica checksum
+- reconstrui em runtime
+
+Arquivo complementar:
+- Use junto com o arquivo SCRIPT_BASE_PROTECAO_MOD.txt
